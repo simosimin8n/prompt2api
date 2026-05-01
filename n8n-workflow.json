@@ -1,0 +1,189 @@
+{
+  "name": "web2api-bridge",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scrape",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "webhook-in",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "web2api-scrape"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.body.url }}",
+        "options": {
+          "timeout": 20000,
+          "redirect": { "redirect": { "followRedirects": true } },
+          "response": { "response": { "responseFormat": "text" } }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; web2api-bridge/1.0)"
+            }
+          ]
+        }
+      },
+      "id": "http-fetch",
+      "name": "Fetch HTML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $input.first().json.data || $input.first().json.body || '';\nconst stripped = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n  .replace(/<!--[\\s\\S]*?-->/g, '')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .trim();\nconst MAX = 30000;\nconst content = stripped.length > MAX ? stripped.slice(0, MAX) + '...[truncated]' : stripped;\nconst body = $('Webhook').first().json.body;\nreturn [{ json: { content, url: body.url, query: body.query, schema: body.schema || null } }];"
+      },
+      "id": "clean-html",
+      "name": "Clean HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=URL: {{ $json.url }}\n\nQuery: {{ $json.query }}\n\nSchema (optional): {{ JSON.stringify($json.schema) }}\n\nPage content:\n{{ $json.content }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You extract structured data from web page text. Return ONLY valid JSON matching the user's request. No prose, no markdown fences. If a schema is provided, follow it exactly."
+            }
+          ]
+        }
+      },
+      "id": "chain-mistral",
+      "name": "LLM Chain (Mistral)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [880, 280],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": "mistral-small-latest",
+        "options": {
+          "responseFormat": "json_object",
+          "temperature": 0.2
+        }
+      },
+      "id": "model-mistral",
+      "name": "Mistral Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [820, 460],
+      "credentials": {
+        "mistralCloudApi": { "id": "MISTRAL_CRED", "name": "Mistral Cloud" }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=URL: {{ $('Clean HTML').item.json.url }}\n\nQuery: {{ $('Clean HTML').item.json.query }}\n\nSchema (optional): {{ JSON.stringify($('Clean HTML').item.json.schema) }}\n\nPage content:\n{{ $('Clean HTML').item.json.content }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You extract structured data from web page text. Return ONLY valid JSON matching the user's request. No prose, no markdown fences. If a schema is provided, follow it exactly."
+            }
+          ]
+        }
+      },
+      "id": "chain-openrouter",
+      "name": "LLM Chain (OpenRouter)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [1180, 440]
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-flash",
+        "options": {
+          "responseFormat": "json_object",
+          "temperature": 0.2,
+          "baseURL": "https://openrouter.ai/api/v1"
+        }
+      },
+      "id": "model-openrouter",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [1120, 620],
+      "credentials": {
+        "openAiApi": { "id": "OPENROUTER_CRED", "name": "OpenRouter (OpenAI-compatible)" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.text ?? item.output ?? item.response ?? '{}';\nlet parsed;\ntry { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; }\ncatch { parsed = { error: 'invalid_json', raw }; }\nconst source = item.__source || 'unknown';\nreturn [{ json: { ok: !parsed.error, data: parsed, source } }];"
+      },
+      "id": "parse-mistral",
+      "name": "Parse (Mistral)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.text ?? item.output ?? item.response ?? '{}';\nlet parsed;\ntry { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; }\ncatch { parsed = { error: 'invalid_json', raw }; }\nreturn [{ json: { ok: !parsed.error, data: parsed, source: 'openrouter/gemini-2.5-flash' } }];"
+      },
+      "id": "parse-openrouter",
+      "name": "Parse (OpenRouter)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 440]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          }
+        }
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Fetch HTML", "type": "main", "index": 0 }]] },
+    "Fetch HTML": { "main": [[{ "node": "Clean HTML", "type": "main", "index": 0 }]] },
+    "Clean HTML": { "main": [[{ "node": "LLM Chain (Mistral)", "type": "main", "index": 0 }]] },
+    "Mistral Chat Model": {
+      "ai_languageModel": [[{ "node": "LLM Chain (Mistral)", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [[{ "node": "LLM Chain (OpenRouter)", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "LLM Chain (Mistral)": {
+      "main": [
+        [{ "node": "Parse (Mistral)", "type": "main", "index": 0 }],
+        [{ "node": "LLM Chain (OpenRouter)", "type": "main", "index": 0 }]
+      ]
+    },
+    "LLM Chain (OpenRouter)": {
+      "main": [[{ "node": "Parse (OpenRouter)", "type": "main", "index": 0 }]]
+    },
+    "Parse (Mistral)": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
+    "Parse (OpenRouter)": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

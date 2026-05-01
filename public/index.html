@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>web2api — bridge</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b0d10; --panel:#14171c; --border:#272c33; --text:#e6e8eb; --muted:#8b929c; --accent:#7c5cff; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:var(--bg); color:var(--text); }
+    main { max-width: 880px; margin: 0 auto; padding: 48px 24px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    p.lede { color: var(--muted); margin: 0 0 32px; font-size: 13px; }
+    label { display:block; font-size: 12px; color: var(--muted); margin: 16px 0 6px; }
+    input, textarea { width:100%; background:var(--panel); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:10px 12px; font: inherit; font-size: 13px; }
+    textarea { min-height: 80px; resize: vertical; }
+    textarea.schema { min-height: 120px; font-size: 12px; }
+    button { margin-top: 20px; background: var(--accent); color: white; border: 0; padding: 10px 18px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: wait; }
+    pre { background: var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px; overflow:auto; font-size: 12px; margin-top: 24px; max-height: 500px; }
+    .row { display:flex; gap:12px; align-items:center; margin-top: 8px; }
+    .badge { font-size: 11px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>web2api</h1>
+    <p class="lede">paste a url, describe what you want, get json.</p>
+
+    <form id="f">
+      <label>URL</label>
+      <input id="url" type="url" required placeholder="https://example.com/page" />
+
+      <label>What to extract (plain English)</label>
+      <textarea id="query" required placeholder="all article titles, authors, and publish dates"></textarea>
+
+      <label>Schema hint (optional JSON)</label>
+      <textarea id="schema" class="schema" placeholder='{"articles": [{"title": "string", "author": "string", "date": "string"}]}'></textarea>
+
+      <div class="row">
+        <button type="submit" id="go">extract →</button>
+        <span class="badge" id="status"></span>
+      </div>
+    </form>
+
+    <pre id="out" hidden></pre>
+  </main>
+
+  <script>
+    const f = document.getElementById('f');
+    const out = document.getElementById('out');
+    const status = document.getElementById('status');
+    const go = document.getElementById('go');
+
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = document.getElementById('url').value.trim();
+      const query = document.getElementById('query').value.trim();
+      const schemaRaw = document.getElementById('schema').value.trim();
+
+      let schema = null;
+      if (schemaRaw) {
+        try { schema = JSON.parse(schemaRaw); }
+        catch { status.textContent = 'schema is not valid JSON'; return; }
+      }
+
+      go.disabled = true;
+      status.textContent = 'fetching...';
+      out.hidden = true;
+
+      const t0 = performance.now();
+      try {
+        const res = await fetch('/api/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, query, schema }),
+        });
+        const data = await res.json();
+        out.textContent = JSON.stringify(data, null, 2);
+        out.hidden = false;
+        const ms = Math.round(performance.now() - t0);
+        status.textContent = `done in ${ms}ms` + (data.source ? ` · ${data.source}` : '');
+      } catch (err) {
+        status.textContent = 'error: ' + err.message;
+      } finally {
+        go.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
