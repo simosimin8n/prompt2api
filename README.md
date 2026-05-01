@@ -37,7 +37,15 @@ const res = await fetch('https://https://prompt2api.pages.dev/api/scrape', {
 });
 const { data } = await res.json();
 ```
-
+```curl
+curl -sX POST https://prompt2api.pages.dev/api/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://news.ycombinator.com",
+    "query": "top 5 stories",
+    "schema": {"stories":[{"title":"string","points":"number"}]}
+  }' | jq
+```
 ## Files
 
 - [public/index.html](public/index.html) — frontend form
