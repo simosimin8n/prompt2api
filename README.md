@@ -22,11 +22,11 @@ The workflow:
 
 ### 3. Use it
 
-- Open `https://your-site.pages.dev`
+- Open `https://prompt2api.pages.dev/`
 - Or call the API directly from your other apps:
 
 ```js
-const res = await fetch('https://your-site.pages.dev/api/scrape', {
+const res = await fetch('https://https://prompt2api.pages.dev/api/scrape', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
