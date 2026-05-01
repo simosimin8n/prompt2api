@@ -75,11 +75,14 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url, query, schema }),
         });
-        const data = await res.json();
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); }
+        catch { data = { ok: false, error: 'non_json_response', status: res.status, body: text.slice(0, 1000) }; }
         out.textContent = JSON.stringify(data, null, 2);
         out.hidden = false;
         const ms = Math.round(performance.now() - t0);
-        status.textContent = `done in ${ms}ms` + (data.source ? ` · ${data.source}` : '');
+        status.textContent = `${res.status} · ${ms}ms` + (data.source ? ` · ${data.source}` : '');
       } catch (err) {
         status.textContent = 'error: ' + err.message;
       } finally {

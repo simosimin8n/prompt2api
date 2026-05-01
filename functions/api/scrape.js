@@ -23,18 +23,51 @@ export async function onRequestPost(context) {
     return json({ ok: false, error: "server_misconfigured" }, 500);
   }
 
-  const res = await fetch(env.N8N_WEBHOOK_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(env.N8N_WEBHOOK_SECRET ? { "X-Webhook-Secret": env.N8N_WEBHOOK_SECRET } : {}),
-    },
-    body: JSON.stringify({ url, query, schema: schema || null }),
-  });
+  let res;
+  try {
+    res = await fetch(env.N8N_WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(env.N8N_WEBHOOK_SECRET ? { "X-Webhook-Secret": env.N8N_WEBHOOK_SECRET } : {}),
+      },
+      body: JSON.stringify({ url, query, schema: schema || null }),
+    });
+  } catch (e) {
+    return json({ ok: false, error: "n8n_unreachable", detail: String(e) }, 502);
+  }
 
   const text = await res.text();
+
+  if (!res.ok) {
+    return json({
+      ok: false,
+      error: "n8n_error",
+      status: res.status,
+      detail: text.slice(0, 500),
+    }, 502);
+  }
+
+  if (!text) {
+    return json({
+      ok: false,
+      error: "n8n_empty_response",
+      hint: "Workflow may not be active, or no Respond to Webhook node fired.",
+    }, 502);
+  }
+
+  try {
+    JSON.parse(text);
+  } catch {
+    return json({
+      ok: false,
+      error: "n8n_non_json_response",
+      detail: text.slice(0, 500),
+    }, 502);
+  }
+
   return new Response(text, {
-    status: res.status,
+    status: 200,
     headers: { "Content-Type": "application/json" },
   });
 }
