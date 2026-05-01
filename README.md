@@ -37,6 +37,8 @@ const res = await fetch('https://https://prompt2api.pages.dev/api/scrape', {
 });
 const { data } = await res.json();
 ```
+or from your preferred terminal 
+
 ```curl
 curl -sX POST https://prompt2api.pages.dev/api/scrape \
   -H "Content-Type: application/json" \
