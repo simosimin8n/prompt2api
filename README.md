@@ -10,13 +10,6 @@ browser → Cloudflare Pages (static) → Pages Function /api/scrape → n8n web
 
 ## Setup
 
-### 1. n8n workflow
-
-1. Import [n8n-workflow.json](n8n-workflow.json) into your n8n instance.
-2. Create two credentials:
-   - **Mistral Cloud API** — paste your key from [console.mistral.ai](https://console.mistral.ai). Attach to the `Mistral Chat Model` node.
-   - **OpenAI API** (used for OpenRouter) — set the API key to your OpenRouter key from [openrouter.ai](https://openrouter.ai), and set the **Base URL** to `https://openrouter.ai/api/v1`. Attach to the `OpenRouter Chat Model` node.
-3. Activate the workflow. Copy the production webhook URL (e.g. `https://your-n8n.example.com/webhook/scrape`).
 
 The workflow:
 - Receives `{ url, query, schema? }` via POST
@@ -26,17 +19,6 @@ The workflow:
 - On error, the chain's error output routes to a second LLM Chain using OpenRouter's `google/gemini-2.5-flash`
 - Returns `{ ok, data, source }`
 
-### 2. Cloudflare Pages
-
-1. Push this repo to GitHub.
-2. In Cloudflare → Pages → Create → connect repo.
-3. Build settings:
-   - Build command: *(none)*
-   - Build output directory: `public`
-4. After first deploy, go to **Settings → Environment variables** and add:
-   - `N8N_WEBHOOK_URL` = your webhook URL from step 1
-   - `N8N_WEBHOOK_SECRET` *(optional)* = a shared secret; if set, Pages forwards it as `X-Webhook-Secret` and you can validate it in n8n
-5. Redeploy so the function picks up env vars.
 
 ### 3. Use it
 
